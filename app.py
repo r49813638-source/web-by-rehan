@@ -15,7 +15,6 @@ BASE_URL = "https://all-aapi-production.up.railway.app"
 ACCOUNTS_FILE = "accounts.json"
 TOKEN_FILE = "token.json"
 
-# INFO ACCOUNT
 INFO_UID = "4423796135"
 INFO_PASS = "REHANN9383U383_77AJZ_BY_SPIDEERIO_GAMING_52U0M"
 
@@ -29,16 +28,20 @@ used_accounts = set()
 def load_tokens():
     if not os.path.exists(TOKEN_FILE):
         return {}
+
     try:
-        with open(TOKEN_FILE) as f:
+        with open(TOKEN_FILE, "r") as f:
             return json.load(f)
     except:
         return {}
 
 def save_tokens(data):
-    with lock:
-        with open(TOKEN_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+    try:
+        with lock:
+            with open(TOKEN_FILE, "w") as f:
+                json.dump(data, f, indent=2)
+    except:
+        pass
 
 def token_expired(token):
     try:
@@ -52,11 +55,10 @@ def token_expired(token):
 def request_token(uid, password):
 
     try:
-
         r = session.get(
             BASE_URL + "/token",
             params={"uid": uid, "password": password},
-            timeout=5
+            timeout=10
         )
 
         j = r.json()
@@ -64,9 +66,7 @@ def request_token(uid, password):
         if j.get("status") == "success":
 
             tokens = load_tokens()
-
             tokens[str(uid)] = j["token"]
-
             save_tokens(tokens)
 
             return j["token"]
@@ -125,7 +125,7 @@ def process_account(acc, target):
                 "token": token,
                 "player_id": target
             },
-            timeout=5
+            timeout=10
         )
 
         j = r.json()
@@ -136,17 +136,10 @@ def process_account(acc, target):
             with lock:
                 used_accounts.add(uid)
 
-        return {
-            "uid": uid,
-            "status": status
-        }
+        return {"uid": uid, "status": status}
 
     except:
-
-        return {
-            "uid": uid,
-            "status": "failed"
-        }
+        return {"uid": uid, "status": "failed"}
 
 # ---------------- SPAM API ----------------
 
@@ -155,14 +148,19 @@ def spam_add():
 
     data = request.json
 
-    target = data["target"]
+    target = data.get("target")
+    limit = int(data.get("limit", 0))
 
-    limit = int(data["limit"])
+    if not os.path.exists(ACCOUNTS_FILE):
+        return jsonify({"error": "accounts.json missing"})
 
-    accounts = json.load(open(ACCOUNTS_FILE))
+    try:
+        with open(ACCOUNTS_FILE) as f:
+            accounts = json.load(f)
+    except:
+        return jsonify({"error": "accounts.json invalid"})
 
     random.shuffle(accounts)
-
     accounts = accounts[:limit]
 
     used_accounts.clear()
@@ -190,10 +188,8 @@ def spam_add():
 
             if status == "success":
                 success += 1
-
             elif status == "duplicate":
                 duplicate += 1
-
             else:
                 failed += 1
 
@@ -212,7 +208,7 @@ def spam_add():
 @app.route("/api/info", methods=["POST"])
 def info():
 
-    uid = request.json["uid"]
+    uid = request.json.get("uid")
 
     token = get_token(INFO_UID, INFO_PASS)
 
@@ -227,22 +223,22 @@ def info():
                 "token": token,
                 "player_id": uid
             },
-            timeout=5
+            timeout=10
         )
 
         return jsonify(r.json())
 
     except:
-
         return jsonify({"status": "failed"})
 
 # ---------------- START SERVER ----------------
 
 if __name__ == "__main__":
 
+    port = int(os.environ.get("PORT", 5000))
+
     app.run(
         host="0.0.0.0",
-        port=1444,
-        threaded=True,
-        debug=True
-    )
+        port=port,
+        threaded=True
+            )
