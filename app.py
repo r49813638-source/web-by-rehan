@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+ from flask import Flask, request, jsonify, render_template
 import requests
 import json
 import time
@@ -17,14 +17,8 @@ ACCOUNTS_FILE = "accounts.json"
 TOKEN_FILE = "token.json"
 
 # -------- Session Setup --------
-
 session = requests.Session()
-
-retry = Retry(
-    total=3,
-    backoff_factor=0.3
-)
-
+retry = Retry(total=3, backoff_factor=0.3)
 adapter = HTTPAdapter(max_retries=retry)
 
 session.mount("http://", adapter)
@@ -33,7 +27,6 @@ session.mount("https://", adapter)
 # ---------------- TOKEN UTILS ----------------
 
 def load_tokens():
-
     if not os.path.exists(TOKEN_FILE):
         return {}
 
@@ -44,19 +37,15 @@ def load_tokens():
         return {}
 
 def save_tokens(data):
-
     with open(TOKEN_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
 def token_expired(token):
-
     try:
         payload = token.split(".")[1]
         payload += "=" * (-len(payload) % 4)
 
-        data = json.loads(
-            base64.urlsafe_b64decode(payload)
-        )
+        data = json.loads(base64.urlsafe_b64decode(payload))
 
         return time.time() > data["exp"]
 
@@ -66,7 +55,6 @@ def token_expired(token):
 def request_token(uid, password):
 
     try:
-
         r = session.get(
             BASE_URL + "/token",
             params={
@@ -81,7 +69,6 @@ def request_token(uid, password):
         if j.get("status") == "success":
 
             tokens = load_tokens()
-
             tokens[str(uid)] = j["token"]
 
             save_tokens(tokens)
@@ -104,7 +91,7 @@ def get_token(uid, password):
 
     return request_token(uid, password)
 
-# ---------------- WEB PAGES ----------------
+# ---------------- PAGES ----------------
 
 @app.route("/")
 def home():
@@ -122,37 +109,23 @@ def info_page():
 
 @app.route("/api/spam_add", methods=["POST"])
 def spam_add():
-
-    data = request.json
-
+    data = request.json or {}
     target = data.get("target")
     limit = int(data.get("limit", 0))
 
-    if not target:
-        return jsonify({
-            "success": 0,
-            "failed": 0,
-            "duplicate": 0,
-            "total": 0
-        })
+    if not target or limit <= 0:
+        return jsonify({"status": "failed", "error": "Invalid input"})
 
-    try:
-        with open(ACCOUNTS_FILE, "r") as f:
-            accounts = json.load(f)
-    except:
-        accounts = []
+    if not os.path.exists(ACCOUNTS_FILE):
+        return jsonify({"status": "failed", "error": "accounts.json missing"})
 
+    accounts = json.load(open(ACCOUNTS_FILE))
     random.shuffle(accounts)
 
-    success = 0
-    failed = 0
-    duplicate = 0
-    used = 0
-
+    success = failed = duplicate = used = 0
     logs = []
 
     for acc in accounts:
-
         if used >= limit:
             break
 
@@ -160,53 +133,37 @@ def spam_add():
         password = acc.get("password")
 
         token = get_token(uid, password)
-
         if not token:
-
             failed += 1
-
-            logs.append({
-                "uid": uid,
-                "status": "token_failed"
-            })
-
+            logs.append({"uid": uid, "status": "token_failed"})
             used += 1
             continue
 
         try:
-
             res = session.get(
                 BASE_URL + "/add_friend",
-                params={
-                    "token": token,
-                    "player_id": target
-                },
-                timeout=5
+                params={"token": token, "player_id": target},
+                timeout=8
             ).json()
+        except requests.exceptions.RequestException:
+            failed += 1
+            logs.append({"uid": uid, "status": "timeout"})
+            used += 1
+            continue
 
-            status = res.get("status", "failed")
-
-        except:
-
-            status = "failed"
+        status = res.get("status", "failed")
 
         if status == "success":
             success += 1
-
         elif status == "duplicate":
             duplicate += 1
-
         else:
             failed += 1
 
-        logs.append({
-            "uid": uid,
-            "status": status
-        })
-
+        logs.append({"uid": uid, "status": status})
         used += 1
 
-        time.sleep(0.3)
+        time.sleep(0.2)  # fast but safe
 
     return jsonify({
         "success": success,
@@ -253,10 +210,10 @@ def info():
 
 if __name__ == "__main__":
 
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 1223))
 
     app.run(
         host="0.0.0.0",
         port=port,
         debug=True
-    )
+        )
