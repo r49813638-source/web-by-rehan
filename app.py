@@ -17,8 +17,14 @@ ACCOUNTS_FILE = "accounts.json"
 TOKEN_FILE = "token.json"
 
 # -------- Session Setup --------
+
 session = requests.Session()
-retry = Retry(total=3, backoff_factor=0.3)
+
+retry = Retry(
+    total=3,
+    backoff_factor=0.3
+)
+
 adapter = HTTPAdapter(max_retries=retry)
 
 session.mount("http://", adapter)
@@ -27,6 +33,7 @@ session.mount("https://", adapter)
 # ---------------- TOKEN UTILS ----------------
 
 def load_tokens():
+
     if not os.path.exists(TOKEN_FILE):
         return {}
 
@@ -37,15 +44,19 @@ def load_tokens():
         return {}
 
 def save_tokens(data):
+
     with open(TOKEN_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
 def token_expired(token):
+
     try:
         payload = token.split(".")[1]
         payload += "=" * (-len(payload) % 4)
 
-        data = json.loads(base64.urlsafe_b64decode(payload))
+        data = json.loads(
+            base64.urlsafe_b64decode(payload)
+        )
 
         return time.time() > data["exp"]
 
@@ -55,6 +66,7 @@ def token_expired(token):
 def request_token(uid, password):
 
     try:
+
         r = session.get(
             BASE_URL + "/token",
             params={
@@ -69,6 +81,7 @@ def request_token(uid, password):
         if j.get("status") == "success":
 
             tokens = load_tokens()
+
             tokens[str(uid)] = j["token"]
 
             save_tokens(tokens)
@@ -112,10 +125,22 @@ def spam_add():
 
     data = request.json
 
-    target = data["target"]
-    limit = int(data["limit"])
+    target = data.get("target")
+    limit = int(data.get("limit", 0))
 
-    accounts = json.load(open(ACCOUNTS_FILE))
+    if not target:
+        return jsonify({
+            "success": 0,
+            "failed": 0,
+            "duplicate": 0,
+            "total": 0
+        })
+
+    try:
+        with open(ACCOUNTS_FILE, "r") as f:
+            accounts = json.load(f)
+    except:
+        accounts = []
 
     random.shuffle(accounts)
 
@@ -131,8 +156,8 @@ def spam_add():
         if used >= limit:
             break
 
-        uid = acc["uid"]
-        password = acc["password"]
+        uid = acc.get("uid")
+        password = acc.get("password")
 
         token = get_token(uid, password)
 
