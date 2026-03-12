@@ -198,11 +198,34 @@ const m1=music1
 const m2=music2
 const icon=musicIcon
 let play=false
+let current=1
 
-function playAlt(){
+function playLoop(){
+
+if(!play)return
+
+if(current===1){
+
+m1.currentTime=0
 m1.play()
-m1.onended=()=>m2.play()
-m2.onended=()=>{if(play)playAlt()}
+
+m1.onended=()=>{
+current=2
+playLoop()
+}
+
+}else{
+
+m2.currentTime=0
+m2.play()
+
+m2.onended=()=>{
+current=1
+playLoop()
+}
+
+}
+
 }
 
 function toggleMusic(){
@@ -213,7 +236,6 @@ m1.pause()
 m2.pause()
 
 icon.className="fas fa-play text-white"
-
 musicToggle.classList.remove('music-pulse')
 
 play=false
@@ -221,10 +243,9 @@ play=false
 }else{
 
 play=true
-playAlt()
+playLoop()
 
 icon.className="fas fa-pause text-white"
-
 musicToggle.classList.add('music-pulse')
 
 }
@@ -234,9 +255,7 @@ musicToggle.classList.add('music-pulse')
 function showNotify(msg,type){
 
 toast.innerText=msg
-
 toast.style.background=type==='success'?'#00c853':'#d50000'
-
 toast.style.display='block'
 
 setTimeout(()=>toast.style.display='none',3000)
@@ -260,7 +279,7 @@ headers:{'Content-Type':'application/json'},
 body:JSON.stringify({
 
 target:f_target.value,
-limit:f_limit.value
+limit:Number(f_limit.value)
 
 })
 
@@ -272,10 +291,10 @@ f_log.innerHTML=`
 
 <div class="space-y-1">
 
-<div class="text-green-400">Success : ${d.success}</div>
-<div class="text-red-400">Failed : ${d.failed}</div>
-<div class="text-yellow-400">Duplicate : ${d.duplicate}</div>
-<div class="text-blue-400">Total Used : ${d.total}</div>
+<div class="text-green-400">Success : ${d.success ?? 0}</div>
+<div class="text-red-400">Failed : ${d.failed ?? 0}</div>
+<div class="text-yellow-400">Duplicate : ${d.duplicate ?? 0}</div>
+<div class="text-blue-400">Total Used : ${d.total ?? 0}</div>
 
 </div>
 
@@ -380,7 +399,6 @@ showNotify("Info Loaded","success")
 }catch{
 
 i_log.innerHTML=`<div class="text-red-500">Failed to load info</div>`
-
 showNotify("Request Failed","error")
 
 }
