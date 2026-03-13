@@ -195,37 +195,34 @@ fTab.classList.toggle('active',t==='friend')
 iTab.classList.toggle('active',t==='info')
 }
 
-// === Music System with 3 tracks dynamically ===
-const musicTracks = [music1, music2, music3].filter(m => m.src)
-const icon = musicIcon
-let play = false
-let current = 0
+const musicTracks=[music1,music2,music3]
+const icon=musicIcon
+let play=false
+let current=0
 
 function playAlt(){
-    if(!musicTracks.length) return
-    musicTracks[current].play()
-    musicTracks[current].onended = () => {
-        current = (current + 1) % musicTracks.length
-        if(play) playAlt()
-    }
+musicTracks[current].play()
+musicTracks[current].onended=()=>{
+current=(current+1)%musicTracks.length
+if(play)playAlt()
+}
 }
 
 function toggleMusic(){
-    if(play){
-        musicTracks.forEach(m => m.pause())
-        icon.className="fas fa-play text-white"
-        musicToggle.classList.remove('music-pulse')
-        play = false
-    } else {
-        play = true
-        current = 0
-        playAlt()
-        icon.className="fas fa-pause text-white"
-        musicToggle.classList.add('music-pulse')
-    }
+if(play){
+musicTracks.forEach(m=>m.pause())
+icon.className="fas fa-play text-white"
+musicToggle.classList.remove('music-pulse')
+play=false
+}else{
+play=true
+current=0
+playAlt()
+icon.className="fas fa-pause text-white"
+musicToggle.classList.add('music-pulse')
+}
 }
 
-// === Notification Function ===
 function showNotify(msg,type){
 toast.innerText=msg
 toast.style.background=type==='success'?'#00c853':'#d50000'
@@ -233,54 +230,68 @@ toast.style.display='block'
 setTimeout(()=>toast.style.display='none',3000)
 }
 
-// === Friend Request ===
 async function sendFriendRequest(){
+
 if(!f_target.value||!f_limit.value)
 return showNotify("Fill all boxes","error")
 
 f_log.innerHTML=`<div class="text-yellow-400 animate-pulse">🚀 Sending requests...</div>`
 
 try{
+
 const r=await fetch("/api/spam_add",{
 method:"POST",
 headers:{'Content-Type':'application/json'},
-body:JSON.stringify({target:f_target.value,limit:f_limit.value})
+body:JSON.stringify({
+target:f_target.value,
+limit:Number(f_limit.value)
 })
+})
+
+if(!r.ok) throw new Error("Server Error")
+
 const d=await r.json()
+
 f_log.innerHTML=`
 <div class="space-y-1">
-<div class="text-green-400">Success : ${d.success}</div>
-<div class="text-red-400">Failed : ${d.failed}</div>
-<div class="text-yellow-400">Duplicate : ${d.duplicate}</div>
-<div class="text-blue-400">Total Used : ${d.total}</div>
+<div class="text-green-400">Success : ${d.success||0}</div>
+<div class="text-red-400">Failed : ${d.failed||0}</div>
+<div class="text-yellow-400">Duplicate : ${d.duplicate||0}</div>
+<div class="text-blue-400">Total Used : ${d.total||0}</div>
 </div>
 `
+
 showNotify("Spam Completed","success")
-}catch{
-f_log.innerHTML=`<div class="text-red-500">Request Failed</div>`
-showNotify("Failed","error")
-}
+
+}catch(e){
+
+f_log.innerHTML=`<div class="text-red-500">API ERROR</div>`
+showNotify("Request Failed","error")
+
 }
 
-// === Info Panel ===
+}
+
 async function getInfo(){
+
 const uid=i_uid.value
 if(!uid)return showNotify("Enter UID","error")
+
 i_log.innerHTML=`<div class="text-yellow-400 animate-pulse">Loading info...</div>`
 
 try{
+
 const res=await fetch("/api/info",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
 body:JSON.stringify({uid})
 })
+
 const data=await res.json()
+
 const acc=data.AccountInfo||{}
 const guild=data.GuildInfo||{}
 const social=data.socialinfo||{}
-
-const createDate=acc.AccountCreateTime?new Date(Number(acc.AccountCreateTime)*1000).toLocaleString():"-"
-const lastLogin=acc.AccountLastLogin?new Date(Number(acc.AccountLastLogin)*1000).toLocaleString():"-"
 
 i_log.innerHTML=`
 <div class="grid grid-cols-2 gap-y-2 text-xs">
@@ -289,24 +300,20 @@ i_log.innerHTML=`
 <div class="text-lime-400 font-bold">LEVEL</div><div>${acc.AccountLevel||"-"}</div>
 <div class="text-cyan-400 font-bold">LIKES</div><div>${acc.AccountLikes||"-"}</div>
 <div class="text-purple-400 font-bold">REGION</div><div>${acc.AccountRegion||"-"}</div>
-<div class="text-orange-400 font-bold">TITLE</div><div>${acc.Title||"-"}</div>
-<div class="text-gray-400 font-bold">CREATED</div><div>${createDate}</div>
-<div class="text-gray-300 font-bold">LAST LOGIN</div><div>${lastLogin}</div>
-<div class="text-orange-400 font-bold">BR RANK</div><div>${acc.BrMaxRank||"-"} | ${acc.BrRankPoint||"-"}</div>
-<div class="text-orange-400 font-bold">CS RANK</div><div>${acc.CsMaxRank||"-"} | ${acc.CsRankPoint||"-"}</div>
 <div class="text-blue-400 font-bold">GUILD</div><div>${guild.GuildName||"-"}</div>
-<div class="text-blue-300 font-bold">MEMBERS</div><div>${guild.GuildMember||"-"} / ${guild.GuildCapacity||"-"}</div>
-<div class="text-blue-500 font-bold">GUILD LEVEL</div><div>${guild.GuildLevel||"-"}</div>
-<div class="text-blue-200 font-bold">GUILD ID</div><div>${guild.GuildID||"-"}</div>
-<div class="text-blue-100 font-bold">OWNER UID</div><div>${guild.GuildOwner||"-"}</div>
 <div class="text-pink-400 font-bold">BIO</div><div>${social.signature||"-"}</div>
 </div>
 `
+
 showNotify("Info Loaded","success")
+
 }catch{
+
 i_log.innerHTML=`<div class="text-red-500">Failed to load info</div>`
 showNotify("Request Failed","error")
+
 }
+
 }
 
 </script>
