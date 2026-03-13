@@ -1,4 +1,4 @@
- from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template
 import requests
 import json
 import time
@@ -97,14 +97,6 @@ def get_token(uid, password):
 def home():
     return render_template("index.html")
 
-@app.route("/spam")
-def spam_page():
-    return render_template("spam.html")
-
-@app.route("/info")
-def info_page():
-    return render_template("info.html")
-
 # ---------------- SPAM API ----------------
 
 @app.route("/api/spam_add", methods=["POST"])
@@ -163,7 +155,7 @@ def spam_add():
         logs.append({"uid": uid, "status": status})
         used += 1
 
-        time.sleep(0.2)  # fast but safe
+        time.sleep(0.2)
 
     return jsonify({
         "success": success,
@@ -210,10 +202,9 @@ def info():
 
 if __name__ == "__main__":
 
-    port = int(os.environ.get("PORT", 1223))
+    port = int(os.environ.get("PORT", 8080))
 
     app.run(
         host="0.0.0.0",
-        port=port,
-        debug=True
-        )
+        port=port
+    )
