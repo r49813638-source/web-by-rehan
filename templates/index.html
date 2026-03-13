@@ -245,32 +245,50 @@ function showNotify(msg,type){
 
 /* PREMIUM SPAM RESPONSE */
 async function sendFriendRequest(){
-    if(!f_target.value||!f_limit.value)
+
+    if(!f_target.value || !f_limit.value)
         return showNotify("Fill all boxes","error");
 
     f_log.innerHTML =
-        `<div class="text-yellow-400 animate-pulse">🚀 Sending requests...</div>`;
+    `<div class="text-yellow-400 animate-pulse">🚀 Sending requests...</div>`;
 
     try{
-        const r=await fetch("/api/spam_add",{
+
+        const r = await fetch("/api/spam_add",{
             method:"POST",
             headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({target:f_target.value,limit:f_limit.value})
+            body:JSON.stringify({
+                target: f_target.value,
+                limit: parseInt(f_limit.value)
+            })
         });
-        const d=await r.json();
+
+        // server error check
+        if(!r.ok){
+            throw new Error("Server Error");
+        }
+
+        const d = await r.json();
 
         f_log.innerHTML=`
-            <div class="space-y-1">
-                <div class="text-green-400">✅ Success : ${d.success}</div>
-                <div class="text-red-400">❌ Failed : ${d.failed}</div>
-                <div class="text-yellow-400">⚠️ Duplicate : ${d.duplicate}</div>
-                <div class="text-blue-400">📦 Total Used : ${d.total}</div>
-                <div class="text-gray-400 text-xs mt-2">Completed Successfully</div>
-            </div>
+        <div class="space-y-1">
+            <div class="text-green-400">✅ Success : ${d.success || 0}</div>
+            <div class="text-red-400">❌ Failed : ${d.failed || 0}</div>
+            <div class="text-yellow-400">⚠️ Duplicate : ${d.duplicate || 0}</div>
+            <div class="text-blue-400">📦 Total Used : ${d.total || 0}</div>
+            <div class="text-gray-400 text-xs mt-2">Completed Successfully</div>
+        </div>
         `;
+
         showNotify("Spam Completed","success");
-    }catch{
-        f_log.innerHTML=`<div class="text-red-500">❌ Request Failed</div>`;
+
+    }catch(err){
+
+        console.error(err);
+
+        f_log.innerHTML =
+        `<div class="text-red-500">❌ Request Failed</div>`;
+
         showNotify("Failed","error");
     }
 }
