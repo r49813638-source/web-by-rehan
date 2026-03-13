@@ -1,111 +1,248 @@
 from flask import Flask, request, jsonify, render_template
-import requests, json, time, os, random, base64
+import requests
+import json
+import time
+import base64
+import os
+import random
+from concurrent.futures import ThreadPoolExecutor
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 app = Flask(__name__)
 
-BASE_URL = "http://127.0.0.1:5999"
+# ---------- API URLs ----------
+
+TOKEN_URL = "https://jwt-1api-production-c29d.up.railway.app"
+SPAM_URL = "https://all-aapi-production.up.railway.app"
 INFO_URL = "https://info-api-production-d187.up.railway.app"
+
 ACCOUNTS_FILE = "accounts.json"
 TOKEN_FILE = "token.json"
 
-# ---------------- Session ----------------
+# ---------- SESSION ----------
+
 session = requests.Session()
-retry = Retry(total=3, backoff_factor=0.3)
+
+retry = Retry(
+    total=4,
+    backoff_factor=0.3,
+    status_forcelist=[500, 502, 503, 504]
+)
+
 adapter = HTTPAdapter(max_retries=retry)
+
 session.mount("http://", adapter)
 session.mount("https://", adapter)
-# ---------------- Pages ----------------
+
+# ---------- TOKEN UTILS ----------
+
+def load_tokens():
+
+    if not os.path.exists(TOKEN_FILE):
+        return {}
+
+    try:
+        with open(TOKEN_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_tokens(data):
+
+    with open(TOKEN_FILE, "w") as f:
+        json.dump(data, f)
+
+def token_expired(token):
+
+    try:
+
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+
+        data = json.loads(base64.urlsafe_b64decode(payload))
+
+        return time.time() > data["exp"]
+
+    except:
+
+        return True
+
+# ---------- TOKEN REQUEST ----------
+
+def request_token(uid, password):
+
+    try:
+
+        r = session.get(
+            TOKEN_URL + "/api/token",
+            params={
+                "uid": uid,
+                "password": password
+            },
+            timeout=10
+        )
+
+        j = r.json()
+
+        if j.get("token"):
+
+            tokens = load_tokens()
+
+            tokens[str(uid)] = j["token"]
+
+            save_tokens(tokens)
+
+            return j["token"]
+
+    except:
+        pass
+
+    return None
+
+
+def get_token(uid, password):
+
+    uid = str(uid)
+
+    tokens = load_tokens()
+
+    if uid in tokens and not token_expired(tokens[uid]):
+        return tokens[uid]
+
+    return request_token(uid, password)
+
+# ---------- WEB PAGES ----------
+
 @app.route("/")
 def home():
     return render_template("index.html")
 
-# ---------------- SPAM API ----------------
+@app.route("/spam")
+def spam_page():
+    return render_template("spam.html")
+
+@app.route("/info")
+def info_page():
+    return render_template("info.html")
+
+# ---------- FAST SPAM ENGINE ----------
+
 @app.route("/api/spam_add", methods=["POST"])
 def spam_add():
-    try:
-        data = request.json or {}
-        target = data.get("target")
-        limit = int(data.get("limit") or 0)
 
-        if not target or limit <= 0:
-            return jsonify({"success":0,"failed":0,"duplicate":0,"total":0,"error":"Invalid input"})
+    data = request.json
 
-        if not os.path.exists(ACCOUNTS_FILE):
-            return jsonify({"success":0,"failed":0,"duplicate":0,"total":0,"error":"accounts.json missing"})
+    target = data["target"]
+    limit = int(data["limit"])
 
-        accounts = json.load(open(ACCOUNTS_FILE))
-        random.shuffle(accounts)
+    accounts = json.load(open(ACCOUNTS_FILE))
 
-        success = failed = duplicate = used = 0
-        logs = []
+    random.shuffle(accounts)
 
-        for acc in accounts:
-            if used >= limit:
-                break
+    accounts = accounts[:limit]
 
-            uid = acc.get("uid")
-            password = acc.get("password")
+    success = 0
+    failed = 0
+    duplicate = 0
 
-            token = get_token(uid,password)
-            if not token:
-                failed += 1
-                logs.append({"uid": uid, "status": "token_failed"})
-                used += 1
-                continue
+    logs = []
 
-            try:
-                r = session.get(BASE_URL+"/add_friend", params={"token": token,"player_id":target}, timeout=8)
-                print("UID:", uid, "Raw Response:", r.text)  # DEBUG LOG
-                res_json = r.json() if r.text else {}
-            except Exception as e:
-                failed += 1
-                logs.append({"uid": uid, "status": "timeout"})
-                used += 1
-                print("UID:", uid, "Request Exception:", e)
-                continue
+    def send_request(acc):
 
-            status = res_json.get("status","failed")
-            if status=="success":
-                success += 1
-            elif status=="duplicate":
-                duplicate += 1
-            else:
-                failed += 1
+        uid = acc["uid"]
+        password = acc["password"]
 
-            logs.append({"uid": uid, "status": status})
-            used += 1
-            time.sleep(0.2)
+        token = get_token(uid, password)
 
-        return jsonify({
-            "success": success,
-            "failed": failed,
-            "duplicate": duplicate,
-            "total": used,
-            "logs": logs
-        })
+        if not token:
+            return {"uid": uid, "status": "token_failed"}
 
-    except Exception as e:
-        print("Spam API Exception:", e)
-        return jsonify({"success":0,"failed":0,"duplicate":0,"total":0,"error": str(e)})
+        try:
 
-# ---------------- PLAYER INFO API ----------------
+            res = session.get(
+                SPAM_URL + "/add_friend",
+                params={
+                    "token": token,
+                    "player_id": target
+                },
+                timeout=10
+            ).json()
+
+            status = res.get("status", "failed")
+
+        except:
+            status = "failed"
+
+        return {"uid": uid, "status": status}
+
+    # parallel requests
+    with ThreadPoolExecutor(max_workers=25) as executor:
+
+        results = list(executor.map(send_request, accounts))
+
+    for r in results:
+
+        if r["status"] == "success":
+            success += 1
+
+        elif r["status"] == "duplicate":
+            duplicate += 1
+
+        else:
+            failed += 1
+
+        logs.append(r)
+
+    return jsonify({
+        "success": success,
+        "failed": failed,
+        "duplicate": duplicate,
+        "total": len(results),
+        "logs": logs
+    })
+
+# ---------- PLAYER INFO API ----------
+
 @app.route("/api/info", methods=["POST"])
 def info():
-    try:
-        uid = request.json.get("uid")
-        if not uid:
-            return jsonify({"status":"failed","error":"UID missing"})
 
-        r = session.get(f"{INFO_URL}/get", params={"uid":uid,"region":"IND"}, timeout=5)
-        return jsonify(r.json() if r.text else {"status":"failed","error":"Empty response"})
+    uid = request.json.get("uid")
+
+    if not uid:
+
+        return jsonify({
+            "status": "failed",
+            "error": "UID missing"
+        })
+
+    try:
+
+        r = session.get(
+            INFO_URL + "/get",
+            params={
+                "uid": uid,
+                "region": "IND"
+            },
+            timeout=6
+        )
+
+        return jsonify(r.json())
 
     except Exception as e:
-        print("Info API Exception:", e)
-        return jsonify({"status":"failed","error": str(e)})
 
-# ---------------- START SERVER ----------------
-if __name__=="__main__":
-    port = int(os.environ.get("PORT",8080))
-    app.run(host="0.0.0.0", port=port)
+        return jsonify({
+            "status": "failed",
+            "error": str(e)
+        })
+
+# ---------- SERVER ----------
+
+if __name__ == "__main__":
+
+    port = int(os.environ.get("PORT", 5000))
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
