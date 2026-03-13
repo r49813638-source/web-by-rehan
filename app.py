@@ -5,7 +5,7 @@ from urllib3.util.retry import Retry
 
 app = Flask(__name__)
 
-BASE_URL = "https://all-aapi-production.up.railway.app"
+BASE_URL = "http://127.0.0.1:5999"
 INFO_URL = "https://info-api-production-d187.up.railway.app"
 ACCOUNTS_FILE = "accounts.json"
 TOKEN_FILE = "token.json"
