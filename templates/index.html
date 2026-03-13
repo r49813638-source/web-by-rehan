@@ -125,18 +125,26 @@ RG <span class="text-white">PREMIUM</span>
 
 <!-- FRIEND -->
 <div id="friendPanel" class="bg-card p-6 text-left space-y-4">
-    <div class="input-box p-3">
-        <input id="f_target" placeholder="Target UID" class="bg-transparent w-full outline-none text-sm">
-    </div>
-    <div class="input-box p-3">
-        <input id="f_limit" type="number" placeholder="How Many Accounts?" class="bg-transparent w-full outline-none text-sm">
-    </div>
 
-    <button onclick="sendFriendRequest()" class="btn-action w-full py-4 rounded-xl font-bold text-xs">
-        SEND SPAM REQUEST
-    </button>
+<div class="input-box p-3">
+<input id="f_target" placeholder="Target UID"
+class="bg-transparent w-full outline-none text-sm">
+</div>
 
-    <div id="f_log" class="mt-3 bg-black border border-gray-700 p-4 rounded-xl text-sm"></div>
+<div class="input-box p-3">
+<input id="f_limit" type="number" min="1" max="100"
+placeholder="How Many Accounts?"
+class="bg-transparent w-full outline-none text-sm">
+</div>
+
+<button onclick="sendFriendRequest()"
+class="btn-action w-full py-4 rounded-xl font-bold text-xs">
+SEND SPAM REQUEST
+</button>
+
+<div id="f_log"
+class="mt-3 bg-black border border-gray-700 p-4 rounded-xl text-sm"></div>
+
 </div>
 
 <!-- INFO -->
@@ -246,37 +254,55 @@ function showNotify(msg,type){
 /* PREMIUM SPAM RESPONSE */
 async function sendFriendRequest(){
 
-    if(!f_target.value || !f_limit.value)
+    const target = document.getElementById("f_target").value;
+    const limit = document.getElementById("f_limit").value;
+    const f_log = document.getElementById("f_log");
+
+    if(!target || !limit){
         return showNotify("Fill all boxes","error");
+    }
 
     f_log.innerHTML =
-    `<div class="text-yellow-400 animate-pulse">🚀 Sending requests...</div>`;
+    `<div class="text-yellow-400 animate-pulse">
+    🚀 Sending requests...
+    </div>`;
 
     try{
 
         const r = await fetch("/api/spam_add",{
             method:"POST",
-            headers:{'Content-Type':'application/json'},
+            headers:{
+                "Content-Type":"application/json"
+            },
             body:JSON.stringify({
-                target: f_target.value,
-                limit: parseInt(f_limit.value)
+                target:target,
+                limit:parseInt(limit)
             })
         });
 
-        // server error check
-        if(!r.ok){
-            throw new Error("Server Error");
+        const text = await r.text();
+
+        let d;
+        try{
+            d = JSON.parse(text);
+        }catch{
+            throw new Error("Invalid JSON");
         }
 
-        const d = await r.json();
+        const success = d.success || 0;
+        const failed = d.failed || 0;
+        const duplicate = d.duplicate || 0;
+        const total = success + failed + duplicate;
 
-        f_log.innerHTML=`
+        f_log.innerHTML = `
         <div class="space-y-1">
-            <div class="text-green-400">✅ Success : ${d.success || 0}</div>
-            <div class="text-red-400">❌ Failed : ${d.failed || 0}</div>
-            <div class="text-yellow-400">⚠️ Duplicate : ${d.duplicate || 0}</div>
-            <div class="text-blue-400">📦 Total Used : ${d.total || 0}</div>
-            <div class="text-gray-400 text-xs mt-2">Completed Successfully</div>
+        <div class="text-green-400">✅ Success : ${success}</div>
+        <div class="text-red-400">❌ Failed : ${failed}</div>
+        <div class="text-yellow-400">⚠️ Duplicate : ${duplicate}</div>
+        <div class="text-blue-400">📦 Total Used : ${total}</div>
+        <div class="text-gray-400 text-xs mt-2">
+        Completed Successfully
+        </div>
         </div>
         `;
 
@@ -284,12 +310,12 @@ async function sendFriendRequest(){
 
     }catch(err){
 
-        console.error(err);
+        console.log(err);
 
         f_log.innerHTML =
-        `<div class="text-red-500">❌ Request Failed</div>`;
+        `<div class="text-red-500">❌ Server Error</div>`;
 
-        showNotify("Failed","error");
+        showNotify("Server Error","error");
     }
 }
 
