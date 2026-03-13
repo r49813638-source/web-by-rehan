@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template
-import requests, json, time, os, random
+import requests, json, time, os, random, base64
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -35,7 +35,7 @@ def token_expired(token):
         payload = token.split(".")[1]
         payload += "=" * (-len(payload) % 4)
         data = json.loads(base64.urlsafe_b64decode(payload))
-        return time.time() > data.get("exp", 0)
+        return time.time() > data.get("exp",0)
     except:
         return True
 
@@ -48,8 +48,8 @@ def request_token(uid,password):
             tokens[str(uid)] = j["token"]
             save_tokens(tokens)
             return j["token"]
-    except:
-        pass
+    except Exception as e:
+        print("Token request failed UID:", uid, "Error:", e)
     return None
 
 def get_token(uid,password):
@@ -71,6 +71,7 @@ def spam_add():
         data = request.json or {}
         target = data.get("target")
         limit = int(data.get("limit") or 0)
+
         if not target or limit <= 0:
             return jsonify({"success":0,"failed":0,"duplicate":0,"total":0,"error":"Invalid input"})
 
@@ -98,12 +99,14 @@ def spam_add():
                 continue
 
             try:
-                res = session.get(BASE_URL+"/add_friend", params={"token": token,"player_id":target}, timeout=8)
-                res_json = res.json() if res.text else {}
-            except:
+                r = session.get(BASE_URL+"/add_friend", params={"token": token,"player_id":target}, timeout=8)
+                print("UID:", uid, "Raw Response:", r.text)  # DEBUG LOG
+                res_json = r.json() if r.text else {}
+            except Exception as e:
                 failed += 1
                 logs.append({"uid": uid, "status": "timeout"})
                 used += 1
+                print("UID:", uid, "Request Exception:", e)
                 continue
 
             status = res_json.get("status","failed")
@@ -127,14 +130,8 @@ def spam_add():
         })
 
     except Exception as e:
-        # Always return JSON to avoid frontend crash
-        return jsonify({
-            "success":0,
-            "failed":0,
-            "duplicate":0,
-            "total":0,
-            "error": str(e)
-        })
+        print("Spam API Exception:", e)
+        return jsonify({"success":0,"failed":0,"duplicate":0,"total":0,"error": str(e)})
 
 # ---------------- PLAYER INFO API ----------------
 @app.route("/api/info", methods=["POST"])
@@ -146,7 +143,9 @@ def info():
 
         r = session.get(f"{INFO_URL}/get", params={"uid":uid,"region":"IND"}, timeout=5)
         return jsonify(r.json() if r.text else {"status":"failed","error":"Empty response"})
+
     except Exception as e:
+        print("Info API Exception:", e)
         return jsonify({"status":"failed","error": str(e)})
 
 # ---------------- START SERVER ----------------
